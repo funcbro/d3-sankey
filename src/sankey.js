@@ -53,6 +53,8 @@ export default function() {
   var x0 = 0, y0 = 0, x1 = 1, y1 = 1, // extent
       dx = 24, // nodeWidth
       py = 8, // nodePadding
+      minPy = 8, // minimal nodePadding when py needs to be recalculated to make the graph fit into the viewport
+      minPyFrac = 0.5, // fraction used when py has to be recalculated to make the graph fit into the viewport
       id = defaultId,
       align = justify,
       nodes = defaultNodes,
@@ -88,6 +90,14 @@ export default function() {
 
   sankey.nodePadding = function(_) {
     return arguments.length ? (py = +_, sankey) : py;
+  };
+
+  sankey.minNodePadding = function(_) {
+    return arguments.length ? (minPy = +_, sankey) : minPy;
+  };
+
+  sankey.minNodePaddingFraction = function(_) {
+    return arguments.length ? (minPyFrac = +_, sankey) : minPyFrac;
   };
 
   sankey.nodes = function(_) {
@@ -182,6 +192,7 @@ export default function() {
         .map(function(d) { return d.values; });
 
     //
+    relaxNodePadding();
     initializeNodeBreadth();
     resolveCollisions();
     for (var alpha = 1, n = iterations; n > 0; --n) {
@@ -191,10 +202,26 @@ export default function() {
       resolveCollisions();
     }
 
+    function relaxNodePadding() {
+      // calculate the maximum allowed padding, so the graph still fits into the viewport
+      var maxPy = min(columns, function (nodes) {
+        return (y1 - y0) / (nodes.length - 1);
+      });
+
+      if(maxPy < py) {
+        py = minPy + (maxPy - minPy) * minPyFrac;
+      }
+    }
+
     function initializeNodeBreadth() {
       var ky = min(columns, function(nodes) {
         return (y1 - y0 - (nodes.length - 1) * py) / sum(nodes, value);
       });
+
+      // a negative ky means, the graph does not fit in the viewport. The following calculatations will result
+      // in a corrupt layout. Keep it positive, to allow correct calculation of the layout, nevertheless, the 
+      // graph will still not fit into the viewport...
+      ky = Math.abs(ky);
 
       columns.forEach(function(nodes) {
         nodes.forEach(function(node, i) {
